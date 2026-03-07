@@ -95,17 +95,30 @@ Resume-Analyzer
 
 
    ⚙️ Installation
-Clone the repository
+Clone the repository:-
+
 git clone https://github.com/yourusername/AI-Resume-Screening-System.git
-Navigate to project folder
+
+Navigate to project folder:-
+
 cd Resume-Analyzer
-Create virtual environment
-python -m venv env
-Activate environment in Windows:
+
+Create virtual environment:-
+
+python -m venv env:-
+
+Activate environment in Windows:-
+
 env\Scripts\activate
-Install dependencies
+
+Install dependencies:-
+
 pip install -r requirements.txt
+
 Run the Streamlit app:
 streamlit run app.py
+
+
+
 
 
