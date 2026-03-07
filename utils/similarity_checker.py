@@ -1,28 +1,33 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import re
+
+def extract_skill_words(text):
+    text = text.lower()
+
+    # keep words only
+    words = re.findall(r"[a-zA-Z]+", text)
+
+    # remove very short words
+    words = [w for w in words if len(w) > 3]
+
+    return " ".join(words)
+
 
 def calculate_similarity_score(jd_text, resume_text):
-    try:
-        documents = [jd_text, resume_text]
 
-        vectorizer = TfidfVectorizer(
-            stop_words='english',
-            ngram_range=(1, 2),   # BIG improvement
-            max_features=5000    # reduces noise
-        )
+    jd_keywords = extract_skill_words(jd_text)
+    resume_keywords = extract_skill_words(resume_text)
 
-        tfidf_matrix = vectorizer.fit_transform(documents)
-        raw_score = cosine_similarity(
-            tfidf_matrix[0:1],
-            tfidf_matrix[1:2]
-        )[0][0]
+    documents = [jd_keywords, resume_keywords]
 
-        # 🔥 NORMALIZATION (Fix-1)
-        boosted_score = raw_score * 100 * 1.5
-        final_score = min(round(boosted_score, 2), 100)
+    vectorizer = TfidfVectorizer(stop_words="english")
 
-        return final_score
+    tfidf_matrix = vectorizer.fit_transform(documents)
 
-    except Exception as e:
-        print(f"Similarity error: {e}")
-        return 0.0
+    score = cosine_similarity(
+        tfidf_matrix[0:1],
+        tfidf_matrix[1:2]
+    )[0][0]
+
+    return round(score * 100, 2)

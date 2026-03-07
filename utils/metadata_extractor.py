@@ -16,8 +16,10 @@ def extract_email_phone_location(text):
         phone = phone_match.group(0)
 
     
-    location_match = re.search(r'(Location|Address)\s*[:\-]?\s*(.+)', text, re.IGNORECASE)
-    if location_match:
-        location = location_match.group(2).split('\n')[0]
+        location_pattern = r"(bangalore|delhi|mumbai|hyderabad|chennai|kolkata|pune|odisha|bhubaneswar|berhampur)"
+
+        location_match = re.search(location_pattern, text.lower())
+
+        location = location_match.group(0) if location_match else "-"
 
     return email or "-", phone or "-", location or "-"

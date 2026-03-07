@@ -7,164 +7,320 @@ from utils.file_handler import extract_text_from_pdf
 from utils.similarity_checker import calculate_similarity_score
 from utils.metadata_extractor import extract_email_phone_location
 
+from models.data_loader import load_dataset
+from models.preprocessing import clean_text
+from models.tfidf_model import apply_tfidf
+from models.classification import train_classifier
+from models.skill_alignment import generate_skill_templates
 
-# =========================
-# SKILLS DATABASE
-# =========================
-SKILLS_DB = [
-    "python", "java", "javascript", "react", "node",
-    "flask", "django", "sql", "mysql", "postgresql",
-    "mongodb", "html", "css", "rest api",
-    "machine learning", "deep learning", "nlp",
-    "docker", "aws", "git", "github"
-]
+from reportlab.platypus import SimpleDocTemplate, Table, Paragraph
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
 
 
-# =========================
-# TEXT CLEANING (FIX-2)
-# =========================
-def clean_text(text):
-    text = text.lower()
-    text = re.sub(r'\S+@\S+', ' ', text)          # emails
-    text = re.sub(r'\b\d{10}\b', ' ', text)      # phone numbers
-    text = re.sub(r'[^a-zA-Z\s]', ' ', text)     # special characters
-    text = re.sub(r'\s+', ' ', text)             # extra spaces
+# -----------------------------
+# STREAMLIT CONFIG
+# -----------------------------
+st.set_page_config(page_title="AI Resume Screening System", layout="wide")
 
-    noise_words = [
-        "education", "experience", "skills",
-        "projects", "certification", "declaration", "address"
-    ]
-    for word in noise_words:
-        text = text.replace(word, '')
+st.title("🤖 AI Resume Screening & Skill Gap Analyzer")
 
-    return text.strip()
+st.markdown("""
+This system uses **Machine Learning + Skill Intelligence**
+to evaluate resumes for job positions.
+""")
 
 
-# =========================
-# SKILL EXTRACTION & GAP
-# =========================
-def extract_skills(text):
-    text = text.lower()
-    return {skill for skill in SKILLS_DB if skill in text}
+# -----------------------------
+# EXPERIENCE EXTRACTOR
+# -----------------------------
+def extract_experience(resume_text):
+
+    text = resume_text.lower()
+    experience = 0
+
+    match1 = re.search(r'(\d+(\.\d+)?)\s*(year|years)', text)
+    match2 = re.search(r'(\d+)\+\s*(year|years)', text)
+
+    if match1:
+        experience = float(match1.group(1))
+
+    elif match2:
+        experience = float(match2.group(1))
+
+    return experience
 
 
-def skill_gap_analysis(job_text, resume_text):
-    job_skills = extract_skills(job_text)
-    resume_skills = extract_skills(resume_text)
+# -----------------------------
+# PDF GENERATOR
+# -----------------------------
+def create_pdf(df):
 
-    matched_skills = job_skills & resume_skills
-    missing_skills = job_skills - resume_skills
+    buffer = io.BytesIO()
 
-    return matched_skills, missing_skills
+    styles = getSampleStyleSheet()
+    title = Paragraph("AI Resume Screening Results", styles['Title'])
 
+    data = [df.columns.tolist()] + df.values.tolist()
 
-# =========================
-# FIX-3: SKILL SCORE
-# =========================
-def calculate_skill_score(job_text, resume_text):
-    job_skills = extract_skills(job_text)
-    resume_skills = extract_skills(resume_text)
+    table = Table(data)
 
-    if not job_skills:
-        return 0.0
+    pdf = SimpleDocTemplate(buffer, pagesize=letter)
 
-    matched = job_skills & resume_skills
-    skill_score = (len(matched) / len(job_skills)) * 100
+    pdf.build([title, table])
 
-    return round(skill_score, 2)
+    buffer.seek(0)
+
+    return buffer
 
 
-# =========================
-# STREAMLIT UI
-# =========================
-st.set_page_config(page_title="Resume Screening Bot", layout="centered")
+# -----------------------------
+# LOAD AI MODEL
+# -----------------------------
+@st.cache_resource
+def load_ai_system():
 
-st.title("📑 Resume Screening AI Bot")
-st.markdown("### Job Description")
+    df = load_dataset()
 
-jd_input = st.text_area("📝 Job Description (Max 1000 words)", height=250)
-word_count = len(jd_input.split())
+    # make categories uppercase
+    df["category"] = df["category"].str.upper()
 
-if word_count > 1000:
-    st.warning(f"❗ Word limit exceeded ({word_count}/1000). Please reduce your job description.")
-    jd_input = ""
+    # -----------------------------
+    # MERGE SIMILAR JOB CATEGORIES
+    # -----------------------------
+    category_mapping = {
+
+        # IT / SOFTWARE
+        "PYTHON DEVELOPER": "IT",
+        "JAVA DEVELOPER": "IT",
+        "FRONTEND DEVELOPER": "IT",
+        "BACKEND DEVELOPER": "IT",
+        "FULL STACK DEVELOPER": "IT",
+        "DEVOPS ENGINEER": "IT",
+        "MACHINE LEARNING ENGINEER": "IT",
+        "DATA SCIENTIST": "IT",
+        "DATA SCIENCE": "IT",
+        "CLOUD ENGINEER": "IT",
+
+        # FINANCE
+        "ACCOUNTANT": "FINANCE",
+        "BANKING": "FINANCE",
+        "FINANCE": "FINANCE",
+
+        # EDUCATION
+        "TEACHER": "EDUCATION",
+        "ARTS": "EDUCATION",
+
+        # SALES
+        "SALES": "SALES",
+        "BUSINESS-DEVELOPMENT": "SALES",
+        "PUBLIC-RELATIONS": "SALES"
+    }
+
+    df["category"] = df["category"].replace(category_mapping)
+
+    # clean resume text
+    df["cleaned_resume"] = df["resume_text"].apply(clean_text)
+
+    # TF-IDF
+    X, vectorizer = apply_tfidf(df["cleaned_resume"])
+
+    # labels
+    y = df["category"]
+
+    # train model
+    model, accuracy, report = train_classifier(X, y)
+
+    templates = generate_skill_templates(df)
+
+    return model, vectorizer, templates, accuracy
+
+
+model, vectorizer, templates, model_accuracy = load_ai_system()
+
+st.sidebar.markdown("### Model Information")
+st.sidebar.write("Classification Accuracy:", round(model_accuracy * 100, 2), "%")
+
+# -----------------------------
+# INPUT SECTION
+# -----------------------------
+st.header("📄 Job Description")
+
+jd_input = st.text_area("Paste Job Description", height=200)
 
 resume_files = st.file_uploader(
-    "📎 Upload Resume PDFs",
+    "Upload Resume PDFs",
     type="pdf",
     accept_multiple_files=True
 )
 
+required_experience = st.number_input(
+    "Required Experience (Years)",
+    min_value=0.0,
+    step=0.5
+)
 
-# =========================
-# MAIN LOGIC
-# =========================
+
+# -----------------------------
+# PROCESS RESUMES
+# -----------------------------
 if jd_input and resume_files:
-    st.markdown("## 📊 Match Scores")
 
     results = []
 
     for file in resume_files:
+
         resume_text = extract_text_from_pdf(file)
 
-        # Clean text before similarity
-        jd_clean = clean_text(jd_input)
         resume_clean = clean_text(resume_text)
+        jd_clean = clean_text(jd_input)
 
-        # TF-IDF score (Fix-1 inside function)
+        # -----------------------------
+        # ROLE PREDICTION
+        # -----------------------------
+        input_vector = vectorizer.transform([resume_clean])
+
+        predicted_role = model.predict(input_vector)[0]
+
+        confidence_scores = model.decision_function(input_vector)
+
+        raw_confidence = abs(confidence_scores.max())
+
+        prediction_confidence = (raw_confidence / (raw_confidence + 1)) * 100
+
+
+        # -----------------------------
+        # SKILL ALIGNMENT
+        # -----------------------------
+        if predicted_role in templates:
+
+            required_skills = templates[predicted_role]
+
+            matched_skills = [
+                skill for skill in required_skills
+                if skill in resume_text.lower()
+            ]
+
+            missing_skills = list(set(required_skills) - set(matched_skills))
+
+            skill_score = (len(matched_skills) / len(required_skills)) * 100
+
+        else:
+
+            required_skills = []
+            matched_skills = []
+            missing_skills = []
+            skill_score = 0
+
+
+        # -----------------------------
+        # JD SIMILARITY
+        # -----------------------------
         tfidf_score = calculate_similarity_score(jd_clean, resume_clean)
 
-        # Skill analysis
-        matched_skills, missing_skills = skill_gap_analysis(jd_input, resume_text)
-        skill_score = calculate_skill_score(jd_input, resume_text)
 
-        # FIX-3: HYBRID FINAL SCORE
-        final_score = round((0.6 * tfidf_score) + (0.4 * skill_score), 2)
+        # -----------------------------
+        # EXPERIENCE MATCH
+        # -----------------------------
+        candidate_experience = extract_experience(resume_text)
 
-        # Contact details
+        if required_experience == 0:
+            experience_score = 100
+        else:
+            experience_score = min((candidate_experience / required_experience) * 100, 100)
+
+
+        # -----------------------------
+        # FINAL SCORE
+        # -----------------------------
+        final_score = round(
+            (0.5 * skill_score) +
+            (0.25 * tfidf_score) +
+            (0.15 * prediction_confidence) +
+            (0.10 * experience_score),
+            2
+        )
+
+
+        # -----------------------------
+        # CONTACT DETAILS
+        # -----------------------------
         email, phone, location = extract_email_phone_location(resume_text)
 
-        # Selection logic
+
+        # -----------------------------
+        # DECISION
+        # -----------------------------
         status = "Selected ✅" if final_score >= 40 else "Rejected ❌"
 
         suggestion = (
             "Improve skills: " + ", ".join(missing_skills)
-            if missing_skills else "All required skills matched"
+            if missing_skills else "Strong skill alignment"
         )
 
+
         results.append({
+
             "Resume": file.name,
-            "TF-IDF Score": f"{tfidf_score}%",
-            "Skill Match Score": f"{skill_score}%",
-            "Final Score": f"{final_score}%",
-            "Status": status,
+            "Predicted Role": predicted_role,
+            "Prediction Confidence (%)": round(prediction_confidence, 2),
+            "Required Skills": ", ".join(required_skills),
             "Matched Skills": ", ".join(matched_skills),
-            "Skill Gap": ", ".join(missing_skills),
-            "Improvement Suggestion": suggestion,
+            "Missing Skills": ", ".join(missing_skills),
+            "Skill Alignment Score (%)": round(skill_score, 2),
+            "JD Similarity Score (%)": tfidf_score,
+            "Candidate Experience (Years)": candidate_experience,
+            "Final Score (%)": final_score,
+            "Decision": status,
+            "Suggestion": suggestion,
             "Email": email,
-            "Contact Number": phone,
+            "Phone": phone,
             "Location": location
         })
 
-    df_results = pd.DataFrame(results)
-    st.table(df_results)
 
-    # Excel download
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_results.to_excel(writer, index=False, sheet_name='Results')
-    output.seek(0)
+    df_results = pd.DataFrame(results)
+
+    st.header("📊 Resume Evaluation Results")
+
+    st.dataframe(df_results)
+
+
+    # -----------------------------
+    # DOWNLOAD EXCEL
+    # -----------------------------
+    excel_buffer = io.BytesIO()
+
+    with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+        df_results.to_excel(writer, index=False)
+
+    excel_buffer.seek(0)
 
     st.download_button(
         label="📥 Download Results as Excel",
-        data=output,
-        file_name="resume_scores.xlsx",
+        data=excel_buffer,
+        file_name="resume_screening_results.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 
+    # -----------------------------
+    # DOWNLOAD PDF
+    # -----------------------------
+    pdf_file = create_pdf(df_results)
+
+    st.download_button(
+        label="📄 Download Results as PDF",
+        data=pdf_file,
+        file_name="resume_screening_results.pdf",
+        mime="application/pdf"
+    )
+
+
 elif jd_input and not resume_files:
-    st.info("Upload at least one resume PDF.")
+
+    st.info("Please upload at least one resume.")
 
 elif resume_files and not jd_input:
-    st.info("Paste the job description above.")
+
+    st.info("Please paste the job description.")
