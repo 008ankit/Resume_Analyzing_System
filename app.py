@@ -82,15 +82,14 @@ def load_ai_system():
 
     df = load_dataset()
 
-    # make categories uppercase
     df["category"] = df["category"].str.upper()
 
     # -----------------------------
-    # MERGE SIMILAR JOB CATEGORIES
+    # CATEGORY MERGING
     # -----------------------------
     category_mapping = {
 
-        # IT / SOFTWARE
+        # IT
         "PYTHON DEVELOPER": "IT",
         "JAVA DEVELOPER": "IT",
         "FRONTEND DEVELOPER": "IT",
@@ -101,6 +100,9 @@ def load_ai_system():
         "DATA SCIENTIST": "IT",
         "DATA SCIENCE": "IT",
         "CLOUD ENGINEER": "IT",
+        "DATABASE": "IT",
+        "HADOOP": "IT",
+        "INFORMATION-TECHNOLOGY": "IT",
 
         # FINANCE
         "ACCOUNTANT": "FINANCE",
@@ -114,21 +116,44 @@ def load_ai_system():
         # SALES
         "SALES": "SALES",
         "BUSINESS-DEVELOPMENT": "SALES",
-        "PUBLIC-RELATIONS": "SALES"
+        "PUBLIC-RELATIONS": "SALES",
+
+        # ENGINEERING
+        "ENGINEERING": "ENGINEERING",
+        "MECHANICAL ENGINEER": "ENGINEERING",
+        "CIVIL ENGINEER": "ENGINEERING",
+        "ELECTRICAL ENGINEERING": "ENGINEERING",
+
+        # HEALTHCARE
+        "HEALTHCARE": "HEALTHCARE",
+        "FITNESS": "HEALTHCARE",
+
+        # HR
+        "HR": "HR"
     }
 
     df["category"] = df["category"].replace(category_mapping)
 
-    # clean resume text
+    # -----------------------------
+    # REMOVE RARE CATEGORIES
+    # -----------------------------
+    df = df.groupby("category").filter(lambda x: len(x) >= 10)
+
+    # -----------------------------
+    # CLEAN TEXT
+    # -----------------------------
     df["cleaned_resume"] = df["resume_text"].apply(clean_text)
 
+    # -----------------------------
     # TF-IDF
+    # -----------------------------
     X, vectorizer = apply_tfidf(df["cleaned_resume"])
 
-    # labels
     y = df["category"]
 
-    # train model
+    # -----------------------------
+    # TRAIN MODEL
+    # -----------------------------
     model, accuracy, report = train_classifier(X, y)
 
     templates = generate_skill_templates(df)
@@ -140,6 +165,7 @@ model, vectorizer, templates, model_accuracy = load_ai_system()
 
 st.sidebar.markdown("### Model Information")
 st.sidebar.write("Classification Accuracy:", round(model_accuracy * 100, 2), "%")
+
 
 # -----------------------------
 # INPUT SECTION
@@ -175,9 +201,6 @@ if jd_input and resume_files:
         resume_clean = clean_text(resume_text)
         jd_clean = clean_text(jd_input)
 
-        # -----------------------------
-        # ROLE PREDICTION
-        # -----------------------------
         input_vector = vectorizer.transform([resume_clean])
 
         predicted_role = model.predict(input_vector)[0]
@@ -242,15 +265,8 @@ if jd_input and resume_files:
         )
 
 
-        # -----------------------------
-        # CONTACT DETAILS
-        # -----------------------------
         email, phone, location = extract_email_phone_location(resume_text)
 
-
-        # -----------------------------
-        # DECISION
-        # -----------------------------
         status = "Selected ✅" if final_score >= 40 else "Rejected ❌"
 
         suggestion = (

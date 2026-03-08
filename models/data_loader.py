@@ -30,11 +30,14 @@ def load_dataset():
     # Remove header row if present
     df = df[df["resume_id"] != "resume_id"]
 
+
     # Convert numeric columns properly
     df["resume_id"] = pd.to_numeric(df["resume_id"], errors="coerce")
     df["experience_years"] = pd.to_numeric(df["experience_years"], errors="coerce")
 
     df = df.dropna(subset=["resume_id"])
+    # Remove rare categories (less than 5 samples)
+    df = df.groupby("category").filter(lambda x: len(x) >= 5)
 
     # 🔥 IMPORTANT STEP (Text preprocessing)
     df["clean_text"] = df["resume_text"].apply(clean_text)

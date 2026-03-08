@@ -23,20 +23,10 @@ def clean_text(text):
 
     text = text.lower()
 
-    # remove emails
-    text = re.sub(r'\S+@\S+', ' ', text)
-
-    # remove phone numbers
-    text = re.sub(r'\b\d{10}\b', ' ', text)
-
-    # remove punctuation
-    text = re.sub(r'[^a-zA-Z\s]', ' ', text)
-
-    # remove extra spaces
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"[^a-zA-Z ]", " ", text)
 
     words = text.split()
 
-    words = [w for w in words if w not in stop_words and len(w) > 2]
+    words = [w for w in words if w not in stop_words]
 
     return " ".join(words)

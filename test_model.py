@@ -20,3 +20,8 @@ model, accuracy, report = train_classifier(X, y)
 
 print("Model Accuracy:", accuracy * 100)
 print(report)
+from sklearn.model_selection import cross_val_score
+
+scores = cross_val_score(model, X, y, cv=5)
+
+print("Cross Validation Accuracy:", scores.mean() * 100)
