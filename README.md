@@ -97,7 +97,7 @@ Resume-Analyzer
    ⚙️ Installation
 Clone the repository:-
 
-git clone https://github.com/sub2004-nanda/Resume-Analyzing-System
+git clone https://github.com/008ankit/Resume-Analyzing-System
 
 Navigate to project folder:-
 
