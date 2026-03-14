@@ -49,7 +49,7 @@ from models.preprocessing import clean_text
 
 def load_dataset():
 
-    df = pd.read_csv("data/Resume dataset.csv")
+    df = pd.read_csv("data/Resumedataset.csv")
 
     # Rename column to match project naming
     df = df.rename(columns={
